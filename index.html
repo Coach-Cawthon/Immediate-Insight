@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Play Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .btn-primary {
+            background-color: #1e40af;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #1e3a8a;
+        }
+        .btn-secondary {
+            background-color: #10b981;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover {
+            background-color: #059669;
+        }
+        .mode-toggle, .side-toggle {
+            display: flex;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .mode-btn, .side-btn {
+            flex: 1;
+            padding: 6px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .mode-btn.active.game { background: #1e40af; color: white; }
+        .mode-btn.active.practice { background: #f59e0b; color: white; }
+        
+        .side-btn.active.offense { background: #0ea5e9; color: white; }
+        .side-btn.active.defense { background: #ef4444; color: white; }
+        
+        tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+        .q-badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .down-badge {
+            font-size: 0.75rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-weight: 800;
+            border: 1px solid currentColor;
+        }
+        .result-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 9999px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .side-badge {
+            font-size: 0.6rem;
+            padding: 1px 4px;
+            border-radius: 4px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .hidden-field {
+            display: none !important;
+        }
+        .editing-highlight {
+            animation: pulse 2s infinite;
+            border: 2px solid #f59e0b !important;
+        }
+        @keyframes pulse {
+            0% { background-color: #fffbeb; }
+            50% { background-color: #fef3c7; }
+            100% { background-color: #fffbeb; }
+        }
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s;
+        }
+        .sortable-header:hover {
+            color: #1e40af;
+        }
+        .sort-icon::after {
+            content: '↕';
+            margin-left: 4px;
+            font-size: 0.8em;
+            opacity: 0.5;
+        }
+        .sort-icon.asc::after { content: '↑'; opacity: 1; }
+        .sort-icon.desc::after { content: '↓'; opacity: 1; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8 font-sans text-gray-900 transition-colors duration-500" id="bodyBg">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-900">Gridiron Play Tracker</h1>
+            <p id="headerGameName" class="text-blue-600 font-semibold text-lg">New Session</p>
+            <div class="flex justify-center mt-2 gap-2">
+                <span id="modeIndicator" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-700">Game Mode</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Play Input Section -->
+            <div class="lg:col-span-1">
+                <div class="card p-6 sticky top-8 transition-all duration-300" id="formCard">
+                    <!-- Session Mode Toggle -->
+                    <div class="mode-toggle" id="modeToggleGroup">
+                        <button id="setGameMode" class="mode-btn active game">Game Day</button>
+                        <button id="setPracticeMode" class="mode-btn practice">Practice</button>
+                    </div>
+
+                    <!-- Side of Ball Toggle -->
+                    <div class="side-toggle" id="sideToggleGroup">
+                        <button id="setOffense" class="side-btn active offense">Offense</button>
+                        <button id="setDefense" class="side-btn defense">Defense</button>
+                    </div>
+
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 id="formTitle" class="text-xl font-semibold text-blue-800">Log Game Play</h2>
+                        <button id="cancelEdit" class="hidden text-xs font-bold text-red-500 uppercase hover:underline">Cancel Edit</button>
+                    </div>
+                    
+                    <form id="playForm" class="space-y-4">
+                        <input type="hidden" id="editingId" value="">
+                        
+                        <div class="grid grid-cols-2 gap-4 p-3 rounded-lg border transition-colors duration-300" id="identityContainer">
+                            <div>
+                                <label id="labelName" class="block text-xs font-bold uppercase">Game Name</label>
+                                <input type="text" id="gameName" placeholder="vs West High" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase">Date</label>
+                                <input type="date" id="playDate" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500 text-sm">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div id="periodContainer">
+                                <label id="labelPeriod" class="block text-xs font-bold text-gray-500 uppercase">Qtr</label>
+                                <select id="playQuarter" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                                    <!-- Options generated by JS -->
+                                </select>
+                            </div>
+                            <div id="downContainer">
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Down</label>
+                                <select id="playDown" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                                    <option value="1">1st</option>
+                                    <option value="2">2nd</option>
+                                    <option value="3">3rd</option>
+                                    <option value="4">4th</option>
+                                </select>
+                            </div>
+                            <div id="distanceContainer">
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Dist</label>
+                                <input type="number" id="playDistance" value="10" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- Defensive Specific Context Row (Opponent Info) -->
+                        <div id="defensiveOpponentInfo" class="hidden grid grid-cols-2 gap-2 bg-gray-50 p-2 rounded-lg border border-red-100">
+                            <div>
+                                <label class="block text-[10px] font-black text-red-600 uppercase">Opp Formation</label>
+                                <input type="text" id="oppFormation" placeholder="Trips Open" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-red-500 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-red-600 uppercase">Opp Concept</label>
+                                <input type="text" id="oppConcept" placeholder="Inside Zone" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-red-500 text-xs">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label id="labelPersonnel" class="block text-sm font-medium text-gray-700">Personnel</label>
+                                <select id="playPersonnel" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                                    <option value="00">00</option>
+                                    <option value="01">01</option>
+                                    <option value="02">02</option>
+                                    <option value="10">10</option>
+                                    <option value="11" selected>11</option>
+                                    <option value="12">12</option>
+                                    <option value="13">13</option>
+                                    <option value="20">20</option>
+                                    <option value="21">21</option>
+                                    <option value="22">22</option>
+                                    <option value="23">23</option>
+                                    <option value="3-4">3-4 Def</option>
+                                    <option value="4-3">4-3 Def</option>
+                                    <option value="Nickel">Nickel</option>
+                                    <option value="Dime">Dime</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label id="labelFormation" class="block text-sm font-medium text-gray-700">Formation</label>
+                                <input type="text" id="playFormation" placeholder="Trips Right" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div id="playCallContainer" class="col-span-1">
+                                <label id="labelPlayName" class="block text-sm font-medium text-gray-700">Play Call</label>
+                                <input type="text" id="playName" placeholder="Smash" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500" required>
+                            </div>
+                            <div id="motionContainer" class="col-span-1">
+                                <label id="labelSecondary" class="block text-sm font-medium text-gray-700">Motion(s)</label>
+                                <input type="text" id="playMotion" placeholder="Jet" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Type</label>
+                                <select id="playType" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                                    <option value="Pass">Pass</option>
+                                    <option value="Run">Run</option>
+                                    <option value="RPO">RPO</option>
+                                    <option value="Special">Special</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label id="labelPlayer" class="block text-sm font-medium text-gray-700">Primary Player</label>
+                                <input type="text" id="playPlayer" placeholder="#22 Smith" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-gray-700">Result</label>
+                                <select id="playResult" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                                    <option value="Rush">Rush</option>
+                                    <option value="Complete">Complete</option>
+                                    <option value="Incomplete">Incomplete</option>
+                                    <option value="Sack">Sack</option>
+                                    <option value="Fumble">Fumble</option>
+                                    <option value="Interception">Interception</option>
+                                    <option value="TD">TD</option>
+                                </select>
+                            </div>
+                            <div id="yardsContainer" class="col-span-1">
+                                <label id="labelYards" class="block text-sm font-medium text-gray-700">Yards Gained</label>
+                                <input type="number" id="yards" placeholder="7" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="submitBtn" class="w-full btn-primary font-bold py-3 mt-2 shadow-lg">Record Play</button>
+                    </form>
+                    <button id="clearData" class="w-full mt-6 text-xs text-red-400 hover:text-red-600 font-medium uppercase tracking-widest">Clear History</button>
+                </div>
+            </div>
+
+            <!-- Analytics & Log Section -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Dashboard Summary -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="statsDashboard">
+                    <div class="card p-4 text-center">
+                        <p class="text-xs text-gray-500 uppercase font-bold">Total Plays</p>
+                        <p id="statTotalPlays" class="text-2xl font-black text-blue-600">0</p>
+                    </div>
+                    <div id="yardsStat" class="card p-4 text-center">
+                        <p id="labelStatYards" class="text-xs text-gray-500 uppercase font-bold">Total Yards</p>
+                        <p id="statTotalYards" class="text-2xl font-black text-blue-600">0</p>
+                    </div>
+                    <div id="avgStat" class="card p-4 text-center">
+                        <p class="text-xs text-gray-500 uppercase font-bold">Avg/Play</p>
+                        <p id="statAvgOverall" class="text-2xl font-black text-blue-600">0.0</p>
+                    </div>
+                    <div class="card p-4 text-center">
+                        <p class="text-xs text-gray-500 uppercase font-bold" id="longestStatLabel">Longest</p>
+                        <p id="statLongest" class="text-2xl font-black text-blue-600">0</p>
+                    </div>
+                </div>
+
+                <!-- Combined Analytics Dashboard -->
+                <div class="card p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800">Efficiency Analytics</h2>
+                            <p class="text-xs text-gray-500">Performance tracking by Play and Formation</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="filterSide" class="text-sm border rounded-lg p-2 bg-gray-50 font-medium">
+                                <option value="All">All Sides</option>
+                                <option value="Offense">Offense</option>
+                                <option value="Defense">Defense</option>
+                            </select>
+                            <select id="filterQuarter" class="text-sm border rounded-lg p-2 bg-gray-50 font-medium">
+                                <option value="All">All Session</option>
+                            </select>
+                            <button id="exportCsv" class="btn-secondary text-xs font-bold py-2 px-4 shadow-sm">Export CSV</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Play Call Efficiency -->
+                        <div>
+                            <h3 id="labelTopPlays" class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top Plays</h3>
+                            <div class="max-h-64 overflow-y-auto custom-scroll border rounded-lg">
+                                <table class="w-full text-left">
+                                    <thead class="bg-gray-50 sticky top-0 text-[10px] text-gray-400 uppercase">
+                                        <tr>
+                                            <th class="px-2 py-2 sortable-header sort-icon" data-sort="name" data-table="plays">Play</th>
+                                            <th class="px-2 py-2 text-center sortable-header sort-icon" data-sort="count" data-table="plays">#</th>
+                                            <th class="px-2 py-2 text-right sortable-header sort-icon desc" id="avgPlayHeader" data-sort="avg" data-table="plays">Avg</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="analysisBody" class="text-xs"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Formation Efficiency -->
+                        <div>
+                            <h3 id="labelFormations" class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Formations & Personnel</h3>
+                            <div class="max-h-64 overflow-y-auto custom-scroll border rounded-lg">
+                                <table class="w-full text-left">
+                                    <thead class="bg-gray-50 sticky top-0 text-[10px] text-gray-400 uppercase">
+                                        <tr>
+                                            <th class="px-2 py-2 sortable-header sort-icon" data-sort="name" data-table="formations">Form (P)</th>
+                                            <th class="px-2 py-2 text-center sortable-header sort-icon desc" data-sort="count" data-table="formations">#</th>
+                                            <th class="px-2 py-2 text-right sortable-header sort-icon" id="avgFormationHeader" data-sort="avg" data-table="formations">Avg</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="formationBody" class="text-xs"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Log -->
+                <div class="card p-6">
+                    <h2 class="text-xl font-bold mb-4 text-gray-800">Full Session Log</h2>
+                    <div class="max-h-96 overflow-y-auto custom-scroll border rounded-lg">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-100 sticky top-0 text-[10px] text-gray-500 uppercase font-bold">
+                                <tr>
+                                    <th class="px-4 py-3">#</th>
+                                    <th class="px-4 py-3 text-center" id="sitHeader">Sit</th>
+                                    <th class="px-4 py-3">Play Details</th>
+                                    <th class="px-4 py-3" id="ydsHeader">Yds</th>
+                                    <th class="px-4 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logBody" class="text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl transform translate-y-20 transition-transform duration-300 pointer-events-none z-50 font-bold border border-gray-700">
+        Play recorded!
+    </div>
+
+    <script>
+        let plays = [];
+        let currentMode = 'game'; 
+        let currentSide = 'Offense';
+        
+        // Sorting State
+        let playSort = { key: 'avg', dir: 'desc' };
+        let formationSort = { key: 'count', dir: 'desc' };
+
+        const form = document.getElementById('playForm');
+        const logBody = document.getElementById('logBody');
+        const analysisBody = document.getElementById('analysisBody');
+        const formationBody = document.getElementById('formationBody');
+        const toast = document.getElementById('toast');
+        const filterQuarterSelect = document.getElementById('filterQuarter');
+        const filterSideSelect = document.getElementById('filterSide');
+        const exportBtn = document.getElementById('exportCsv');
+        const headerGameName = document.getElementById('headerGameName');
+        const formCard = document.getElementById('formCard');
+        const cancelEditBtn = document.getElementById('cancelEdit');
+        const editingIdInput = document.getElementById('editingId');
+        const modeToggleGroup = document.getElementById('modeToggleGroup');
+        const sideToggleGroup = document.getElementById('sideToggleGroup');
+
+        const inputDown = document.getElementById('playDown');
+        const inputDistance = document.getElementById('playDistance');
+        const inputQuarter = document.getElementById('playQuarter');
+        const inputDate = document.getElementById('playDate');
+        const inputGameName = document.getElementById('gameName');
+        const inputPersonnel = document.getElementById('playPersonnel');
+        const inputFormation = document.getElementById('playFormation');
+        const inputMotion = document.getElementById('playMotion');
+        const inputResult = document.getElementById('playResult');
+        const inputType = document.getElementById('playType');
+        const inputYards = document.getElementById('yards');
+        const inputPlayer = document.getElementById('playPlayer');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // New Defensive Fields
+        const inputOppFormation = document.getElementById('oppFormation');
+        const inputOppConcept = document.getElementById('oppConcept');
+        const defensiveOpponentInfo = document.getElementById('defensiveOpponentInfo');
+
+        const gameBtn = document.getElementById('setGameMode');
+        const practiceBtn = document.getElementById('setPracticeMode');
+        const offenseBtn = document.getElementById('setOffense');
+        const defenseBtn = document.getElementById('setDefense');
+
+        const downContainer = document.getElementById('downContainer');
+        const distanceContainer = document.getElementById('distanceContainer');
+        const yardsContainer = document.getElementById('yardsContainer');
+        const periodContainer = document.getElementById('periodContainer');
+        const motionContainer = document.getElementById('motionContainer');
+        const playCallContainer = document.getElementById('playCallContainer');
+
+        window.addEventListener('load', () => {
+            const today = new Date().toISOString().split('T')[0];
+            inputDate.value = today;
+
+            const savedData = localStorage.getItem('fb_plays_v3');
+            const savedGameName = localStorage.getItem('fb_game_name');
+            const savedMode = localStorage.getItem('fb_current_mode');
+            const savedSide = localStorage.getItem('fb_current_side');
+            
+            if (savedData) {
+                plays = JSON.parse(savedData);
+            }
+            if (savedGameName) {
+                inputGameName.value = savedGameName;
+                headerGameName.textContent = savedGameName;
+            }
+            
+            if (savedMode) setMode(savedMode);
+            else setMode('game');
+
+            if (savedSide) setSide(savedSide);
+            else setSide('Offense');
+
+            updateUI();
+        });
+
+        document.querySelectorAll('.sortable-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const table = header.dataset.table;
+                const key = header.dataset.sort;
+                
+                if (table === 'plays') {
+                    if (playSort.key === key) playSort.dir = playSort.dir === 'asc' ? 'desc' : 'asc';
+                    else { playSort.key = key; playSort.dir = 'desc'; }
+                } else {
+                    if (formationSort.key === key) formationSort.dir = formationSort.dir === 'asc' ? 'desc' : 'asc';
+                    else { formationSort.key = key; formationSort.dir = 'desc'; }
+                }
+                
+                document.querySelectorAll(`.sortable-header[data-table="${table}"]`).forEach(h => {
+                    h.classList.remove('asc', 'desc');
+                    if (h.dataset.sort === (table === 'plays' ? playSort.key : formationSort.key)) {
+                        h.classList.add(table === 'plays' ? playSort.dir : formationSort.dir);
+                    }
+                });
+                
+                updateUI();
+            });
+        });
+
+        function setMode(mode) {
+            currentMode = mode;
+            localStorage.setItem('fb_current_mode', mode);
+
+            const identityContainer = document.getElementById('identityContainer');
+            const formTitle = document.getElementById('formTitle');
+            const labelName = document.getElementById('labelName');
+            const labelPeriod = document.getElementById('labelPeriod');
+            const modeIndicator = document.getElementById('modeIndicator');
+
+            gameBtn.classList.toggle('active', mode === 'game');
+            practiceBtn.classList.toggle('active', mode === 'practice');
+
+            if (mode === 'game') {
+                identityContainer.className = "grid grid-cols-2 gap-4 p-3 rounded-lg border border-blue-100 bg-blue-50 text-blue-800";
+                formTitle.className = "text-xl font-semibold text-blue-800";
+                formTitle.textContent = editingIdInput.value ? "Edit Game Play" : "Log Game Play";
+                labelName.textContent = "Game Name";
+                labelPeriod.textContent = "Qtr";
+                modeIndicator.textContent = "Game Mode";
+                modeIndicator.className = "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-700";
+                headerGameName.className = "text-blue-600 font-semibold text-lg";
+                if(!editingIdInput.value) submitBtn.className = "w-full btn-primary font-bold py-3 mt-2 shadow-lg";
+                
+                downContainer.classList.remove('hidden-field');
+                distanceContainer.classList.remove('hidden-field');
+                yardsContainer.classList.remove('hidden-field');
+                periodContainer.classList.remove('col-span-3');
+
+                updatePeriodOptions(['Q1', 'Q2', 'Q3', 'Q4', 'OT']);
+            } else {
+                identityContainer.className = "grid grid-cols-2 gap-4 p-3 rounded-lg border border-amber-100 bg-amber-50 text-amber-800";
+                formTitle.className = "text-xl font-semibold text-amber-800";
+                formTitle.textContent = editingIdInput.value ? "Edit Practice Drill" : "Log Practice Drill";
+                labelName.textContent = "Practice Focus";
+                labelPeriod.textContent = "Period";
+                modeIndicator.textContent = "Practice Mode";
+                modeIndicator.className = "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-100 text-amber-700";
+                headerGameName.className = "text-amber-600 font-semibold text-lg";
+                if(!editingIdInput.value) submitBtn.className = "w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 mt-2 shadow-lg rounded-md transition-all";
+                
+                downContainer.classList.add('hidden-field');
+                distanceContainer.classList.add('hidden-field');
+                yardsContainer.classList.add('hidden-field');
+                periodContainer.classList.add('col-span-3');
+
+                updatePeriodOptions(['Inside Run', '7 on 7', 'Team']);
+            }
+            updateUI();
+        }
+
+        function setSide(side) {
+            currentSide = side;
+            localStorage.setItem('fb_current_side', side);
+            
+            offenseBtn.classList.toggle('active', side === 'Offense');
+            defenseBtn.classList.toggle('active', side === 'Defense');
+
+            const labelPersonnel = document.getElementById('labelPersonnel');
+            const labelFormation = document.getElementById('labelFormation');
+            const labelPlayName = document.getElementById('labelPlayName');
+            const labelYards = document.getElementById('labelYards');
+            const labelPlayer = document.getElementById('labelPlayer');
+            const labelSecondary = document.getElementById('labelSecondary');
+
+            labelPersonnel.textContent = 'Personnel';
+
+            if (side === 'Offense') {
+                labelFormation.textContent = 'Formation';
+                labelPlayName.textContent = 'Play Call';
+                labelYards.textContent = 'Yards Gained';
+                labelPlayer.textContent = 'Primary Player';
+                labelSecondary.textContent = 'Motion(s)';
+                motionContainer.classList.remove('hidden-field');
+                defensiveOpponentInfo.classList.add('hidden');
+                playCallContainer.classList.replace('col-span-2', 'col-span-1');
+            } else {
+                labelFormation.textContent = 'Def Front';
+                labelPlayName.textContent = 'Blitz/Stunt';
+                labelYards.textContent = 'Yards Allowed';
+                labelPlayer.textContent = 'Primary Tackler';
+                labelSecondary.textContent = 'Coverage';
+                motionContainer.classList.remove('hidden-field');
+                defensiveOpponentInfo.classList.remove('hidden');
+                playCallContainer.classList.replace('col-span-2', 'col-span-1');
+            }
+            updateUI();
+        }
+
+        function updatePeriodOptions(options) {
+            const currentVal = inputQuarter.value;
+            inputQuarter.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+            if (options.includes(currentVal)) inputQuarter.value = currentVal;
+            
+            filterQuarterSelect.innerHTML = `<option value="All">All Session</option>` + 
+                options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+        }
+
+        gameBtn.addEventListener('click', () => setMode('game'));
+        practiceBtn.addEventListener('click', () => setMode('practice'));
+        offenseBtn.addEventListener('click', () => setSide('Offense'));
+        defenseBtn.addEventListener('click', () => setSide('Defense'));
+
+        inputGameName.addEventListener('input', (e) => {
+            const val = e.target.value.trim() || "New Session";
+            headerGameName.textContent = val;
+            localStorage.setItem('fb_game_name', e.target.value);
+        });
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const yardVal = currentMode === 'game' ? (parseInt(inputYards.value) || 0) : 0;
+            const distVal = currentMode === 'game' ? (parseInt(inputDistance.value) || 10) : 0;
+            const downVal = currentMode === 'game' ? parseInt(inputDown.value) : 1;
+            
+            const isEditing = editingIdInput.value !== "";
+
+            const playData = {
+                mode: currentMode,
+                side: currentSide,
+                gameName: inputGameName.value.trim() || (currentMode === 'game' ? "Untitled Game" : "Team Drill"),
+                date: inputDate.value,
+                quarter: inputQuarter.value,
+                down: downVal,
+                distance: distVal,
+                personnel: inputPersonnel.value,
+                formation: inputFormation.value.trim() || "Base",
+                motion: inputMotion.value.trim() || "None",
+                name: document.getElementById('playName').value.trim(),
+                player: inputPlayer.value.trim() || "N/A",
+                type: inputType.value,
+                result: inputResult.value,
+                yards: yardVal,
+                oppFormation: currentSide === 'Defense' ? inputOppFormation.value.trim() : "",
+                oppConcept: currentSide === 'Defense' ? inputOppConcept.value.trim() : "",
+                timestamp: isEditing ? plays.find(p => p.id == editingIdInput.value).timestamp : new Date().toLocaleTimeString()
+            };
+
+            if (isEditing) {
+                const index = plays.findIndex(p => p.id == editingIdInput.value);
+                if (index !== -1) {
+                    plays[index] = { ...playData, id: parseInt(editingIdInput.value) };
+                }
+                exitEditMode();
+                showToast('Play Updated');
+            } else {
+                const newPlay = { ...playData, id: Date.now() };
+                plays.unshift(newPlay);
+                if (currentMode === 'game' && currentSide === 'Offense') {
+                    updateSituationForNextPlay(downVal, distVal, yardVal, newPlay.result);
+                }
+                showToast('Play Recorded');
+            }
+
+            saveAndRefresh();
+            
+            document.getElementById('playName').value = '';
+            inputYards.value = '';
+            inputPlayer.value = '';
+            inputMotion.value = '';
+            inputOppFormation.value = '';
+            inputOppConcept.value = '';
+            document.getElementById('playName').focus();
+        });
+
+        function editPlay(id) {
+            const play = plays.find(p => p.id === id);
+            if (!play) return;
+
+            editingIdInput.value = id;
+            setMode(play.mode); 
+            setSide(play.side || 'Offense');
+            
+            inputDate.value = play.date;
+            inputQuarter.value = play.quarter;
+            inputDown.value = play.down;
+            inputDistance.value = play.distance;
+            inputPersonnel.value = play.personnel || "11";
+            inputFormation.value = play.formation;
+            inputMotion.value = play.motion === "N/A" ? "" : play.motion;
+            document.getElementById('playName').value = play.name;
+            inputPlayer.value = play.player;
+            inputType.value = play.type;
+            inputResult.value = play.result;
+            inputYards.value = play.yards;
+            inputOppFormation.value = play.oppFormation || "";
+            inputOppConcept.value = play.oppConcept || "";
+
+            formCard.classList.add('editing-highlight');
+            cancelEditBtn.classList.remove('hidden');
+            modeToggleGroup.classList.add('opacity-50', 'pointer-events-none');
+            sideToggleGroup.classList.add('opacity-50', 'pointer-events-none');
+            submitBtn.textContent = "Save Changes";
+            submitBtn.className = "w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 mt-2 shadow-lg rounded-md transition-all";
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function exitEditMode() {
+            editingIdInput.value = "";
+            formCard.classList.remove('editing-highlight');
+            cancelEditBtn.classList.add('hidden');
+            modeToggleGroup.classList.remove('opacity-50', 'pointer-events-none');
+            sideToggleGroup.classList.remove('opacity-50', 'pointer-events-none');
+            submitBtn.textContent = "Record Play";
+            setMode(currentMode); 
+        }
+
+        cancelEditBtn.addEventListener('click', exitEditMode);
+
+        function updateSituationForNextPlay(lastDown, lastDist, yardsGained, result) {
+            if (['Interception', 'Fumble', 'TD'].includes(result)) {
+                inputDown.value = "1";
+                inputDistance.value = "10";
+                return;
+            }
+
+            if (yardsGained >= lastDist) {
+                inputDown.value = "1";
+                inputDistance.value = "10";
+            } else {
+                if (lastDown < 4) {
+                    inputDown.value = (lastDown + 1).toString();
+                    inputDistance.value = Math.max(1, lastDist - yardsGained);
+                } else {
+                    inputDown.value = "1";
+                    inputDistance.value = "10";
+                }
+            }
+        }
+
+        filterQuarterSelect.addEventListener('change', updateUI);
+        filterSideSelect.addEventListener('change', updateUI);
+
+        exportBtn.addEventListener('click', () => {
+            const filtered = plays.filter(p => p.mode === currentMode);
+            if (filtered.length === 0) return showToast("No data for current mode");
+            
+            const headers = ["Mode", "Side", "Session Name", "Date", "Period/Qtr", "Down", "Distance", "Personnel", "Formation/Front", "Motion/Coverage", "Opp Form", "Opp Concept", "Play Call", "Primary Player", "Type", "Result", "Yards", "Time"];
+            const csvRows = [headers.join(",")];
+            
+            [...filtered].reverse().forEach(p => {
+                const row = [
+                    p.mode.toUpperCase(),
+                    p.side || "OFFENSE",
+                    `"${p.gameName}"`, 
+                    p.date, 
+                    p.quarter, 
+                    p.down, 
+                    p.distance, 
+                    `"${p.personnel}"`, 
+                    `"${p.formation}"`, 
+                    `"${p.motion}"`,
+                    `"${p.oppFormation || ''}"`,
+                    `"${p.oppConcept || ''}"`,
+                    `"${p.name}"`, 
+                    `"${p.player}"`,
+                    p.type, 
+                    p.result, 
+                    p.yards, 
+                    p.timestamp
+                ];
+                csvRows.push(row.join(","));
+            });
+            const blob = new Blob([csvRows.join("\n")], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const fileName = (inputGameName.value.trim() || currentMode).replace(/[^a-z0-9]/gi, '_');
+            a.download = `${fileName}_${inputDate.value}.csv`;
+            a.click();
+            showToast("Exported CSV");
+        });
+
+        function deletePlay(id) {
+            if (confirm('Delete this play?')) {
+                plays = plays.filter(p => p.id !== id);
+                if (editingIdInput.value == id) exitEditMode();
+                saveAndRefresh();
+            }
+        }
+
+        document.getElementById('clearData').addEventListener('click', () => {
+            if(confirm('Clear all session history?')) {
+                plays = [];
+                inputGameName.value = "";
+                headerGameName.textContent = "New Session";
+                localStorage.removeItem('fb_game_name');
+                exitEditMode();
+                saveAndRefresh();
+            }
+        });
+
+        function getResultColor(result, playType) {
+            if (result === 'TD') return 'bg-yellow-100 text-yellow-700';
+            if (['Fumble', 'Interception'].includes(result)) return 'bg-red-100 text-red-700';
+            if (result === 'Sack') return 'bg-orange-100 text-orange-700';
+            
+            if (playType === 'Run' || result === 'Rush') return 'bg-green-100 text-green-700';
+            if (playType === 'Pass' || result === 'Complete') return 'bg-blue-100 text-blue-700';
+            
+            return 'bg-gray-100 text-gray-700';
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('fb_plays_v3', JSON.stringify(plays));
+            updateUI();
+        }
+
+        function updateUI() {
+            const currentFilterQ = filterQuarterSelect.value;
+            const currentFilterS = filterSideSelect.value;
+            
+            const modePlays = plays.filter(p => p.mode === currentMode);
+            
+            const filteredPlays = modePlays.filter(p => {
+                const qMatch = currentFilterQ === 'All' || p.quarter === currentFilterQ;
+                const sMatch = currentFilterS === 'All' || (p.side || 'Offense') === currentFilterS;
+                return qMatch && sMatch;
+            });
+            
+            document.getElementById('sitHeader').className = currentMode === 'game' ? 'px-4 py-3 text-center' : 'hidden';
+            document.getElementById('ydsHeader').className = currentMode === 'game' ? 'px-4 py-3' : 'hidden';
+            
+            document.getElementById('yardsStat').className = currentMode === 'game' ? 'card p-4 text-center' : 'hidden';
+            document.getElementById('avgStat').className = currentMode === 'game' ? 'card p-4 text-center' : 'hidden';
+
+            const topPlaysLabel = document.getElementById('labelTopPlays');
+            const formationsLabel = document.getElementById('labelFormations');
+            const statYardsLabel = document.getElementById('labelStatYards');
+
+            if (currentFilterS === 'Defense') {
+                topPlaysLabel.textContent = 'Defensive Call Success';
+                formationsLabel.textContent = 'Opponent Context (Form/Concept)';
+                statYardsLabel.textContent = 'Yards Allowed';
+            } else {
+                topPlaysLabel.textContent = 'Top Plays';
+                formationsLabel.textContent = 'Formations & Personnel';
+                statYardsLabel.textContent = 'Total Yards';
+            }
+
+            renderLog(modePlays);
+            renderPlayEfficiency(filteredPlays, currentFilterS);
+            renderFormationEfficiency(filteredPlays, currentFilterS);
+            updateStats(filteredPlays);
+        }
+
+        function renderLog(data) {
+            logBody.innerHTML = data.map((p, index) => {
+                const side = p.side || 'Offense';
+                const sideColor = side === 'Offense' ? 'bg-sky-100 text-sky-700' : 'bg-red-100 text-red-700';
+                
+                let details;
+                if (side === 'Offense') {
+                    details = `${p.personnel}P • ${p.formation} ${p.motion && p.motion !== 'None' ? `(${p.motion})` : ''} • ${p.type}`;
+                } else {
+                    details = `<span class="text-red-600 font-bold">${p.oppFormation || 'N/A'} [${p.oppConcept || 'N/A'}]</span> vs ${p.formation}/${p.motion}`;
+                }
+
+                return `
+                <tr class="border-b hover:bg-gray-50 group">
+                    <td class="px-4 py-3 text-gray-400 font-mono text-xs">${data.length - index}</td>
+                    <td class="px-4 py-3 text-center">
+                        <div class="flex flex-col items-center">
+                             <span class="q-badge mb-1">${p.quarter}</span>
+                             ${currentMode === 'game' ? `<span class="down-badge text-blue-600 border-blue-200 bg-blue-50">${p.down}&${p.distance}</span>` : ''}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <span class="side-badge ${sideColor}">${side.charAt(0)}</span>
+                            <span class="font-bold text-gray-800">${p.name}</span>
+                            <span class="result-badge ${getResultColor(p.result, p.type)}">${p.result}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-500 font-semibold uppercase tracking-tight">
+                            ${details} ${p.player !== 'N/A' ? `• <span class="text-blue-700 font-bold">${p.player}</span>` : ''}
+                        </div>
+                    </td>
+                    ${currentMode === 'game' ? `
+                    <td class="px-4 py-3 font-bold ${p.yards >= 0 ? (side === 'Offense' ? 'text-green-600' : 'text-red-600') : (side === 'Offense' ? 'text-red-600' : 'text-green-600')}">
+                        ${p.yards > 0 ? '+' : ''}${p.yards}
+                    </td>` : ''}
+                    <td class="px-4 py-3 text-right">
+                        <div class="flex justify-end gap-1 opacity-20 group-hover:opacity-100 transition-opacity">
+                            <button onclick="editPlay(${p.id})" class="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            </button>
+                            <button onclick="deletePlay(${p.id})" class="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        function sortData(arr, sortState) {
+            return arr.sort((a, b) => {
+                let valA = a[1][sortState.key];
+                let valB = b[1][sortState.key];
+                if (sortState.key === 'name') { valA = a[0].toLowerCase(); valB = b[0].toLowerCase(); }
+                if (valA < valB) return sortState.dir === 'asc' ? -1 : 1;
+                if (valA > valB) return sortState.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        function renderPlayEfficiency(data, filterSide) {
+            const analysis = {};
+            data.forEach(p => {
+                const key = `${p.name}`;
+                if (!analysis[key]) analysis[key] = { count: 0, total: 0, avg: 0 };
+                analysis[key].count++;
+                analysis[key].total += p.yards;
+                analysis[key].avg = analysis[key].total / analysis[key].count;
+            });
+            const entries = sortData(Object.entries(analysis), playSort);
+            analysisBody.innerHTML = entries.map(([name, s]) => {
+                let colorClass = 'text-gray-600';
+                if (currentMode === 'game') {
+                    if (filterSide === 'Defense') {
+                        // For defense, lower average is better
+                        if (s.avg < 3.5) colorClass = 'text-green-600';
+                        else if (s.avg > 7) colorClass = 'text-red-600';
+                    } else {
+                        // For offense, higher average is better
+                        if (s.avg > 5.5) colorClass = 'text-blue-600';
+                        else if (s.avg < 2.5) colorClass = 'text-orange-600';
+                    }
+                }
+                
+                return `
+                <tr class="border-b">
+                    <td class="px-2 py-2 font-semibold text-gray-700 truncate max-w-[120px]">${name}</td>
+                    <td class="px-2 py-2 text-center text-gray-500">${s.count}</td>
+                    ${currentMode === 'game' ? `<td class="px-2 py-2 text-right font-black ${colorClass}">${s.avg.toFixed(1)}</td>` : ''}
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function renderFormationEfficiency(data, filterSide) {
+            const forms = {};
+            data.forEach(p => {
+                const key = p.side === 'Defense' 
+                    ? `${p.oppFormation || 'Base'} [${p.oppConcept || 'N/A'}]`
+                    : `${p.formation} (${p.personnel}P)`;
+                if (!forms[key]) forms[key] = { count: 0, total: 0, avg: 0 };
+                forms[key].count++;
+                forms[key].total += p.yards;
+                forms[key].avg = forms[key].total / forms[key].count;
+            });
+            const entries = sortData(Object.entries(forms), formationSort);
+            formationBody.innerHTML = entries.map(([name, s]) => {
+                let colorClass = 'text-gray-600';
+                if (currentMode === 'game') {
+                    if (filterSide === 'Defense') {
+                        if (s.avg > 7) colorClass = 'text-red-600';
+                        else if (s.avg < 3.5) colorClass = 'text-green-600';
+                    } else {
+                        if (s.avg > 5.5) colorClass = 'text-blue-600';
+                    }
+                }
+                return `
+                <tr class="border-b">
+                    <td class="px-2 py-2 font-semibold text-gray-700 truncate max-w-[120px]">${name}</td>
+                    <td class="px-2 py-2 text-center text-gray-500">${s.count}</td>
+                    ${currentMode === 'game' ? `<td class="px-2 py-2 text-right font-black ${colorClass}">${s.avg.toFixed(1)}</td>` : ''}
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function updateStats(data) {
+            const playsCount = data.length;
+            const yards = data.reduce((s, p) => s + p.yards, 0);
+            const color = currentSide === 'Defense' ? 'text-red-600' : 'text-blue-600';
+            
+            document.getElementById('statTotalPlays').textContent = playsCount;
+            document.getElementById('statTotalPlays').className = `text-2xl font-black ${color}`;
+            
+            if (currentMode === 'game') {
+                document.getElementById('statTotalYards').textContent = yards;
+                document.getElementById('statTotalYards').className = `text-2xl font-black ${color}`;
+                document.getElementById('statAvgOverall').textContent = playsCount > 0 ? (yards/playsCount).toFixed(1) : "0.0";
+                document.getElementById('statAvgOverall').className = `text-2xl font-black ${color}`;
+                document.getElementById('statLongest').textContent = playsCount > 0 ? Math.max(...data.map(p => p.yards)) : 0;
+                document.getElementById('statLongest').className = `text-2xl font-black ${color}`;
+            } else {
+                document.getElementById('statLongest').textContent = playsCount;
+                document.getElementById('statLongest').className = `text-2xl font-black ${color}`;
+            }
+        }
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.remove('translate-y-20');
+            setTimeout(() => toast.classList.add('translate-y-20'), 2000);
+        }
+    </script>
+</body>
+</html>
